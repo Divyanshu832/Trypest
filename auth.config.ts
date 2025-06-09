@@ -86,7 +86,6 @@ export default {
     error: "/",
   },
   secret: process.env.NEXTAUTH_SECRET,
-  skipCSRFCheck: true,
 
   session: {
     strategy: "jwt",
