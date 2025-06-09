@@ -3,9 +3,9 @@ import { z } from "zod";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import db from "./lib/prisma";
-import {JWT} from "next-auth/jwt";
+import { JWT } from "next-auth/jwt";
 
-import {  NextAuthConfig } from "next-auth";
+import { NextAuthConfig } from "next-auth";
 import { decl } from "postcss";
 
 const CredentialsSchema = z.object({
@@ -20,18 +20,16 @@ declare module "next-auth" {
   interface Session {
     user: {
       /** The user's name. */
-      id: string ;
-      name: string ;
-      email: string ;
-      role: string |null; 
-      image: string ;
+      id: string;
+      name: string;
+      email: string;
+      role: string | null;
+      image: string;
       printName: string | null;
       isFirstLogin: boolean;
     };
   }
 }
-
-
 
 declare module "@auth/core/jwt" {
   interface JWT {
@@ -48,7 +46,8 @@ export default {
       credentials: {
         email: { label: "Email", type: "email" },
         pasword: { label: "Password", type: "password" },
-      },      async authorize(credentials) {
+      },
+      async authorize(credentials) {
         const validatedFields = CredentialsSchema.safeParse(credentials);
 
         if (!validatedFields.success) {
@@ -83,15 +82,15 @@ export default {
     // Google
   ],
   pages: {
-    
     signIn: "/",
     error: "/",
   },
-  secret: "hbsidufgkiasubd",
+  secret: process.env.NEXTAUTH_SECRET,
 
   session: {
     strategy: "jwt",
-  },  callbacks: {
+  },
+  callbacks: {
     async jwt({ token, user }) {
       if (user) {
         const DBuser = await db.user.findUnique({
@@ -118,12 +117,14 @@ export default {
 
       return session;
     },
-
     async redirect({ url, baseUrl }) {
       // Handle redirects after sign in
+      // If the url is relative, append it to baseUrl
       if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // If the url is absolute and on the same origin, return it
       else if (new URL(url).origin === baseUrl) return url;
-      return baseUrl;
+      // Default to dashboard for successful logins
+      return `${baseUrl}/dashboard`;
     },
   },
 } satisfies NextAuthConfig;

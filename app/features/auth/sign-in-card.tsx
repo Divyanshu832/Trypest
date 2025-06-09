@@ -1,10 +1,9 @@
 "use client";
 
-
 import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
- 
+
 import { TriangleAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -25,29 +24,22 @@ export const SignInCard = () => {
 
   const params = useSearchParams();
   const error = params.get("error");
-
-  const onCredentialSignIn = (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const onCredentialSignIn = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     signIn("credentials", {
       email: email,
       password: password,
-      callbackUrl: "/",
+      callbackUrl: "/dashboard",
     });
   };
-
   const onProviderSignIn = (provider: "github" | "google") => {
-    signIn(provider, { callbackUrl: "/" });
+    signIn(provider, { callbackUrl: "/dashboard" });
   };
 
   return (
     <Card className="w-full h-full p-8">
       <CardHeader className="px-0 pt-0">
-        <CardTitle>
-          Login to continue
-        </CardTitle>
+        <CardTitle>Login to continue</CardTitle>
         <CardDescription>
           Use your email or another service to continue
         </CardDescription>
@@ -100,7 +92,10 @@ export const SignInCard = () => {
           </Button>
         </div> */}
         <p className="text-xs text-muted-foreground">
-          Don&apos;t have an account? <Link href="/sign-up"><span className="text-sky-700 hover:underline">Sign up</span></Link>
+          Don&apos;t have an account?{" "}
+          <Link href="/sign-up">
+            <span className="text-sky-700 hover:underline">Sign up</span>
+          </Link>
         </p>
       </CardContent>
     </Card>
