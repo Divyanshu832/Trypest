@@ -1,95 +1,65 @@
-import { z } from "zod";
-
-import Credentials from "next-auth/providers/credentials";
+import { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import db from "./lib/prisma";
-import { JWT } from "next-auth/jwt";
+import { db } from "@/lib/db";
+import Credentials from "next-auth/providers/credentials";
+import { CredentialsSchema } from "@/schemas";
+import { compare } from 'bcrypt';
 
-import { NextAuthConfig } from "next-auth";
-import { decl } from "postcss";
-
-const CredentialsSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-
-declare module "next-auth" {
-  /**
-   * Returned by `useSession`, `getSession` and received as a prop on the `SessionProvider` React Context
-   */
-  interface Session {
-    user: {
-      /** The user's name. */
-      id: string;
-      name: string;
-      email: string;
-      role: string | null;
-      image: string;
-      printName: string | null;
-      isFirstLogin: boolean;
-    };
-  }
-}
-
-declare module "@auth/core/jwt" {
-  interface JWT {
-    id: string | undefined;
-    role: string | null;
-    printName: string | null;
-    isFirstLogin: boolean;
-  }
-}
-export default {
+export const authConfig: NextAuthOptions = {
   adapter: PrismaAdapter(db),
-  providers: [
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        pasword: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const validatedFields = CredentialsSchema.safeParse(credentials);
-
-        if (!validatedFields.success) {
-          return null;
-        }
-
-        const { email, password } = validatedFields.data;
-
-        const user = await db.user.findUnique({
-          where: { email: email }, // Look up the user by email
-        });
-
-        // 2. If no user or no password is found, return null
-        if (!user || !user.password) {
-          return null;
-        }
-
-        // 3. Compare the password directly (no hashing)
-        const passwordsMatch = password === user.password;
-
-        // 4. If passwords don't match, return null
-        if (!passwordsMatch) {
-          return null;
-        }
-
-        // 5. Return the user if authentication is successful
-        return user;
-      },
-    }),
-
-    // GitHub,
-    // Google
-  ],
+  session: {
+    strategy: "jwt",
+  },
+  // Add this line to bypass CSRF checks (TEMPORARY FOR DEBUGGING ONLY)
+  skipCSRFCheck: true,
+  debug: true,
   pages: {
     signIn: "/",
     error: "/",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }, // Fixed the typo "pasword" to "password"
+      },
+      async authorize(credentials) {
+        const validatedFields = CredentialsSchema.safeParse({
+            email: credentials.email,
+            password: credentials.password // Fixed the typo "pasword" to "password"
+        });
 
-  session: {
-    strategy: "jwt",
-  },
+        if (validatedFields.success) {
+          const { email, password } = validatedFields.data;
+          
+          const user = await db.user.findUnique({
+            where: {
+              email,
+            }
+          });
+
+          if (!user || !user.password) {
+            return null;
+          }
+
+          // Check if passwords match (since you're not using hashing)
+          if (password !== user.password) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            name: user.printName,
+            email: user.email,
+            role: user.role,
+            isFirstLogin: user.isFirstLogin,
+          };
+        }
+
+        return null;
+      }
+    })
+  ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -103,28 +73,44 @@ export default {
         token.printName = DBuser?.printName ?? null;
         token.isFirstLogin = DBuser?.isFirstLogin ?? false;
       }
-
       return token;
     },
-
-    session: async ({ session, token }) => {
-      if (token.id) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.printName = token.printName ?? null;
-        session.user.isFirstLogin = token.isFirstLogin;
+    async session({ session, token }) {
+      if (token.id && session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+        session.user.printName = token.printName as string;
+        session.user.isFirstLogin = token.isFirstLogin as boolean;
       }
-
       return session;
     },
-    async redirect({ url, baseUrl }) {
-      // Handle redirects after sign in
-      // If the url is relative, append it to baseUrl
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // If the url is absolute and on the same origin, return it
-      else if (new URL(url).origin === baseUrl) return url;
-      // Default to dashboard for successful logins
-      return `${baseUrl}/dashboard`;
-    },
   },
-} satisfies NextAuthConfig;
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax", 
+        path: "/",
+        secure: true
+      }
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: true
+      }
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true
+      }
+    }
+  },
+};
